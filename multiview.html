@@ -1,0 +1,222 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Full-Screen Multi-Stream Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #1a1a1a;
+      font-family: Arial, sans-serif;
+      color: white;
+      overflow: hidden;
+    }
+    .container {
+      display: grid;
+      gap: 5px;
+      width: 100vw;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+    .main-stream {
+      grid-column: 2 / span 2;
+      grid-row: 2 / span 2;
+      background-color: #333;
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      z-index: 2;
+      position: relative;
+    }
+    .side-stream {
+      background-color: #333;
+      border: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain; /* Maintains video aspect ratio */
+    }
+    .stream-label {
+      position: absolute;
+      bottom: 5px;
+      left: 5px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 2px 5px;
+      font-size: 0.8em;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="container">
+    <div class="main-stream" id="main-stream">
+      <video id="main-video" autoplay="true" controls playsinline></video>
+      <span class="stream-label" id="main-label">Main Stream</span>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    // Array of streams with .m3u8 URLs and labels (replace with actual .m3u8 URLs)
+    const streams = [
+      { url: "https://kneset.gostreaming.tv/p2-kneset/_definst_/myStream/playlist.m3u8", label: "ערוץ כנסת" },
+      { url: "https://knesetn.gostreaming.tv/Knesset/index.m3u8", label: "מליאה" },
+      { url: "https://knesetn.gostreaming.tv/V-Knesset/index.m3u8", label: "ועדת הכנסת" },
+      { url: "https://knesetn.gostreaming.tv/V-Ksafim/index.m3u8", label: "כספים" },
+      { url: "https://knesetn.gostreaming.tv/V-Aliya/index.m3u8", label: "עלייה וקליטה" },
+      { url: "https://knesetn.gostreaming.tv/V-Kalkala/index.m3u8", label: "כלכלה" },
+      { url: "https://knesetn.gostreaming.tv/V_Samim/index.m3u8", label: "סמים ואלכוהול" },
+      { url: "https://knesetn.gostreaming.tv/V-Huka/index.m3u8", label: "חוקה, חוק ומשפט" },
+      { url: "https://knesetn.gostreaming.tv/V-Hinuch/index.m3u8", label: "חינוך" },
+      { url: "https://knesetn.gostreaming.tv/V-Bikoret/index.m3u8", label: "ביקורת המדינה" },
+      { url: "https://knesetn.gostreaming.tv/V-Madaa/index.m3u8", label: "מדע וטכנולוגיה" },
+      { url: "https://knesetn.gostreaming.tv/V-Pnim/index.m3u8", label: "פנים" },
+      { url: "https://knesetn.gostreaming.tv/V-Tzibur/index.m3u8", label: "פניות הציבור" },
+      { url: "https://knesetn.gostreaming.tv/V-Yeled/index.m3u8", label: "זכויות הילד" },      
+      { url: "https://knesetn.gostreaming.tv/V-Hutz/index.m3u8", label: "חוץ" },
+      { url: "https://knesetn.gostreaming.tv/V-Avoda/index.m3u8", label: "עבודה ורווחה" },
+      { url: "https://knesetn.gostreaming.tv/V-Isha/index.m3u8", label: "מעמד האישה" },
+      { url: "https://knesetn.gostreaming.tv/V-Jerusalem/index.m3u8",  label: "אולם ירושלים" },
+      { url: "https://knesetn.gostreaming.tv/V-Negev/index.m3u8",  label: "אולם נגב" },
+      { url: "https://knesetn.gostreaming.tv/V-Shprincek/index.m3u8",  label: "אולם שפרינצק" },
+      { url: "https://knesetn.gostreaming.tv/V-Hilel/index.m3u8",  label: "אולם שפרינצק" },
+    ];
+
+    const container = document.getElementById('container');
+    const mainStreamDiv = document.getElementById('main-stream');
+    const mainVideo = document.getElementById('main-video');
+    const mainLabel = document.getElementById('main-label');
+    let mainStreamIndex = 0; // Track current main stream
+    const numStreams = streams.length;
+
+    // Calculate grid dimensions
+    const cols = Math.max(3, Math.ceil(Math.sqrt(numStreams + 1)));
+    const rows = Math.ceil((numStreams + 1) / cols);
+    container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+    // Initialize HLS.js for a video element
+    function initHLS(videoElement, streamUrl) {
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(streamUrl);
+        hls.attachMedia(videoElement);
+        videoElement.play().catch(e => console.error('Playback error:', e));
+      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+        videoElement.src = streamUrl;
+        videoElement.play().catch(e => console.error('Playback error:', e));
+      }
+    }
+
+    // Initialize main stream
+    initHLS(mainVideo, streams[mainStreamIndex].url);
+    mainLabel.textContent = streams[mainStreamIndex].label;
+
+    function placeSideStreams() {
+  document.querySelectorAll('.side-stream').forEach(el => el.remove());
+
+  let streamIndex = 0;
+  for (let row = 1; row <= rows && streamIndex < numStreams; row++) {
+    for (let col = 1; col <= cols && streamIndex < numStreams; col++) {
+      // Skip cells reserved for main stream (center block 2x2)
+      if (
+        row >= 2 && row <= 3 &&
+        col >= 2 && col <= 3
+      ) continue;
+
+      if (streamIndex === mainStreamIndex) {
+        streamIndex++;
+        continue;
+      }
+
+      const streamDiv = document.createElement('div');
+      streamDiv.className = 'side-stream';
+      streamDiv.style.gridColumn = col;
+      streamDiv.style.gridRow = row;
+
+      const video = document.createElement('video');
+      video.muted = true;
+      video.autoplay = true;
+      video.playsinline = true;
+      initHLS(video, streams[streamIndex].url);
+
+      const label = document.createElement('span');
+      label.className = 'stream-label';
+      label.textContent = streams[streamIndex].label;
+
+      streamDiv.appendChild(video);
+      streamDiv.appendChild(label);
+      streamDiv.dataset.index = streamIndex;
+
+      streamDiv.addEventListener('click', () => {
+        const clickedIndex = parseInt(streamDiv.dataset.index);
+        const oldMainIndex = mainStreamIndex;
+        mainStreamIndex = clickedIndex;
+
+        // Update main stream
+        initHLS(mainVideo, streams[mainStreamIndex].url);
+        mainLabel.textContent = streams[mainStreamIndex].label;
+
+        // Re-render side streams
+        placeSideStreams();
+      });
+
+      container.appendChild(streamDiv);
+      streamIndex++;
+    }
+  }
+}
+    // Initialize side streams
+    placeSideStreams();
+  </script>
+</body>
+</html>
